@@ -1,6 +1,5 @@
-function dFSHdt_ss = FSH_steady_state(FSH, E2, Ih, rF)
+function dFSHdt_ss = FSH_steady_state(FSH, E2, Ih, rF, dF)
     % Parameters
-    dF = 0.4;
     alphaF = 0.3;
     gammaF = 0.1;
 

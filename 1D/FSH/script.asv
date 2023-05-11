@@ -1,0 +1,219 @@
+%% 1D
+clear all; close all
+% Simulation parameters
+startTime = 0;
+stopTime = 28;
+dt = 0.001;
+
+% Parameters for E2 and Ih functions
+e0 = 37.4;
+e1 = 150;
+e2 = 12;
+e3 = 115;
+e4 = 18;
+
+% E2 function (from provided data)
+E2 = @(t) e0 + e1 * exp(-(t-14).^2/e2) + e3 * exp(-(t-23).^2/e4) + e1 * exp(-(t-45).^2/e2) + e3 * exp(-(t-54).^2/e4);
+
+% Parameters for Ih function
+i0 = 0.4;
+i1 = 4;
+i2 = 6;
+
+% Ih function
+Ih = @(t) i0 + i1 * exp(-(t-22)^2/i2)+i2*exp(-(t-53)^2/i2);
+
+% Initial condition for FSH
+initialFSH = 14;
+
+% Run the simulation
+[t, FSH] = ode45(@(t, FSH) FSH_equation(t, FSH, E2, Ih), [startTime, stopTime], initialFSH);
+
+% Plot results
+figure;
+plot(t, FSH, 'LineWidth', 2);
+xlabel('Time (days)');
+ylabel('FSH Concentration');
+title('1D Hormonal Regulation Model: FSH');
+
+% Calculate E2 and Ih for each time point
+E2_values = arrayfun(E2, t);
+Ih_values = arrayfun(Ih, t);
+
+% Plot E2
+figure;
+plot(t, E2_values, 'LineWidth', 2);
+xlabel('Time (days)');
+ylabel('E2 Concentration');
+title('1D Hormonal Regulation Model: E2');
+
+%% Sensitivity_rF
+
+% Vary the rF parameter
+rF_values = linspace(-3, 3, 5);  % Create a range of gammaF values to test
+
+% Initialize a matrix to store FSH concentrations
+FSH_values = zeros(length(rF_values), length(t));
+
+% Loop through each rF value
+for i = 1:length(rF_values)
+    % Update the FSH_equation function with the new rF value
+    FSH_equation_new = @(t, FSH) FSH_equation_sensitivity(t, FSH, E2, Ih, rF_values(i));
+    
+    % Run the simulation
+    [t_temp, FSH_temp] = ode45(@(t, FSH) FSH_equation_new(t, FSH), [startTime, stopTime], initialFSH);
+    
+    % Interpolate FSH_temp to match the size of t
+    FSH_temp_interp = interp1(t_temp, FSH_temp, t);
+    
+    % Store the FSH concentrations for the current rF value
+    FSH_values(i, :) = FSH_temp_interp';
+end
+
+% Plot the sensitivity analysis results
+figure;
+surf(t, rF_values, FSH_values);
+xlabel('Time (days)');
+ylabel('rF Parameter');
+zlabel('FSH Concentration');
+title('Sensitivity Analysis: FSH vs rF Parameter');
+
+%% Sensitivity_dF
+
+% Vary the dF parameter
+dF_values = linspace(0.2, 0.8, 5);  % Create a range of dF values to test
+
+% Initialize a matrix to store FSH concentrations
+FSH_values_dF = zeros(length(dF_values), length(t));
+
+% Loop through each dF value
+for i = 1:length(dF_values)
+    % Update the FSH_equation function with the new dF value
+    FSH_equation_new = @(t, FSH) FSH_equation_sensitivity_dF(t, FSH, E2, Ih, dF_values(i));
+    
+    % Run the simulation
+    [t_temp, FSH_temp] = ode45(@(t, FSH) FSH_equation_new(t, FSH), [startTime, stopTime], initialFSH);
+    
+    % Interpolate FSH_temp to match the size of t
+    FSH_temp_interp = interp1(t_temp, FSH_temp, t);
+    
+    % Store the FSH concentrations for the current dF value
+    FSH_values_dF(i, :) = FSH_temp_interp';
+end
+
+% Plot the sensitivity analysis results
+figure;
+surf(t, dF_values, FSH_values_dF);
+xlabel('Time (days)');
+ylabel('dF Parameter');
+zlabel('FSH Concentration');
+title('Sensitivity Analysis: FSH vs dF Parameter');
+
+%% FSH Concentration vs dFSHdt
+% Vary the dF parameter
+dF_values = linspace(0.2, 0.8, 5);  % Create a range of dF values to test
+
+% Initialize a matrix to store FSH concentrations
+FSH_values = zeros(length(dF_values), length(t));
+
+% Loop through each dF value
+for i = 1:length(dF_values)
+    % Update the FSH_equation function with the new dF value
+    FSH_equation_new = @(t, FSH) FSH_equation_sensitivity_dF(t, FSH, E2, Ih, dF_values(i));
+    
+    % Run the simulation
+    [t_temp, FSH_temp] = ode45(@(t, FSH) FSH_equation_new(t, FSH), [startTime, stopTime], initialFSH);
+    
+    % Interpolate FSH_temp to match the size of t
+    FSH_temp_interp = interp1(t_temp, FSH_temp, t);
+    
+    % Store the FSH concentrations for the current dF value
+    FSH_values(i, :) = FSH_temp_interp';
+end
+
+% Create a new figure for Time vs FSH concentration
+figure;
+for i = 1:length(dF_values)
+    plot(t, FSH_values(i, :), 'LineWidth', 2);
+    hold on;
+end
+xlabel('Time (days)');
+ylabel('FSH Concentration');
+title('Sensitivity Analysis: Time vs FSH Concentration');
+legend(arrayfun(@(x) sprintf('dF = %.2f', x), dF_values, 'UniformOutput', false), 'Location', 'bestoutside');
+
+% Calculate dFSHdt values for each FSH value and dF value
+dFSHdt_values = zeros(size(FSH_values));
+
+for i = 1:length(dF_values)
+    for j = 1:length(t)
+        dFSHdt_values(i, j) = FSH_equation_sensitivity_dF(t(j), FSH_values(i, j), E2, Ih, dF_values(i));
+    end
+end
+
+% Plot the FSH values against the corresponding dFSHdt values for different dF values
+figure;
+hold on;
+for i = 1:length(dF_values)
+    plot(FSH_values(i, :), dFSHdt_values(i, :), 'LineWidth', 2);
+end
+xlabel('FSH Concentration');
+ylabel('Change Rate of FSH Concentration');
+title('FSH Concentration vs Change Rate of FSH Concentration for Varying dF Values');
+legend(arrayfun(@(x) sprintf('dF = %.2f', x), dF_values, 'UniformOutput', false), 'Location', 'bestoutside');
+hold off;
+
+%% Phase Portrait
+FSH_range = linspace(-30,30, 150);
+
+dF_single = 1.5; % Set a single value for dF
+dFSHdt_grid = FSH_derivatives(FSH_range, t, E2, Ih, dF_single);
+[T_grid, FSH_grid] = meshgrid(t, FSH_range);
+U_grid = ones(size(T_grid));
+
+figure;
+hold on;
+% Plot the vector field
+for j = 1:length(t)
+    V_grid = dFSHdt_grid(:, j);
+    quiver(T_grid(:, j), FSH_grid(:, j), U_grid(:, j), V_grid, .75, 'k');
+end
+
+% Overlay the trajectories for different initial FSH concentrations
+initial_FSH_values = linspace(-20,30,5);
+rF_placeholder = 1.5;  % Please replace this with the correct value or variable
+for i = 1:length(initial_FSH_values)
+    [t1, FSH1] = ode45(@(t, FSH) FSH_steady_state(FSH, E2(t), Ih(t), rF_placeholder, dF_single), t, initial_FSH_values(i));
+    plot(t1, FSH1, 'linewidth', 1);
+end
+
+xlim([0, 20]); ylim([-1, 5]);
+xticks(0:2:20); yticks(-2:1:5);
+ 
+xlabel('Time (days)');
+ylabel('FSH Concentration');
+title('FSH Concentration vs Change Rate of FSH Concentration (Phase Portrait)');
+hold off;
+
+%% Add MatCont path
+% Initial conditions
+FSH_init = 14;
+
+% Parameter range
+dF_range = linspace(0.1, 0.7, 100);
+
+% FSH Bifurcation
+ap1 = 1; % Index of the parameter to be varied (dF)
+[t_sol, FSH_sol] = ode45(@(t, FSH) fsh_systems(t, FSH, 0.4), [0 28], FSH_init); % Solve for the initial steady state
+[x0, v0] = init_EP_EP(@(t, FSH, p) fsh_systems(t, FSH, p), FSH_sol(end), 0.4, ap1); % Set initial equilibrium point
+opt = contset; % Get default options
+opt.Singularities = 0;
+opt.MaxNumPoints = length(dF_range);
+[x_bif, y_bif] = cont(@equilibrium, x0, v0, opt);
+
+% Plot bifurcation diagrams
+figure;
+plot(x_bif(1:end-1, ap1), x_bif(1:end-1, 1), 'b');
+xlabel('dF');
+ylabel('FSH');
+title('Bifurcation diagram (FSH)');

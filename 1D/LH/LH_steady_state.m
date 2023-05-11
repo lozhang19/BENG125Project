@@ -1,7 +1,6 @@
-function dLHdt_ss = LH_steady_state(LH, E2_value, P4_value, rL)
+function dLHdt_ss = LH_steady_state(LH, E2_value, P4_value, rL, dL)
 
     % Parameters 
-    dL = 0.4;
     alphaL = 0.3;
     alphaL2 = 0.3;
 

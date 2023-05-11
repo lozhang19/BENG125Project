@@ -1,6 +1,8 @@
+%% 1D
+clear all; close all
 % Simulation parameters
 startTime = 0;
-stopTime = 56;
+stopTime = 28;
 dt = 0.001;
 
 % Parameters for E2 and Ih functions
@@ -11,7 +13,7 @@ e3 = 115;
 e4 = 18;
 
 % E2 function (from provided data)
-E2 = @(t) e0 + e1 * exp(-(t-14)^2/e2) + e3 * exp(-(t-23)^2/e4) +e1 * exp(-(t-45)^2/e2) + e3 * exp(-(t-54)^2/e4);
+E2 = @(t) e0 + e1 * exp(-(t-14).^2/e2) + e3 * exp(-(t-23).^2/e4) + e1 * exp(-(t-45).^2/e2) + e3 * exp(-(t-54).^2/e4);
 
 % Parameters for Ih function
 i0 = 0.4;
@@ -45,29 +47,18 @@ xlabel('Time (days)');
 ylabel('E2 Concentration');
 title('1D Hormonal Regulation Model: E2');
 
-%% Fixed Points
-% Parameters
-rF = 1.5;
-E2_value = E2(14); 
-Ih_value = Ih(14);  
-
-% Use fsolve to find the fixed point
-FSH_fixed_point = fsolve(@(FSH) FSH_steady_state(FSH, E2_value, Ih_value, rF), initialFSH);
-
-disp(['FSH fixed point: ', num2str(FSH_fixed_point)]);
-
-%% Sensitivity_gammaF
+%% Sensitivity_rF
 
 % Vary the rF parameter
-gammaF_values = linspace(-3, 3, 10);  % Create a range of gammaF values to test
+rF_values = linspace(-3, 3, 5);  % Create a range of gammaF values to test
 
 % Initialize a matrix to store FSH concentrations
-FSH_values = zeros(length(gammaF_values), length(t));
+FSH_values = zeros(length(rF_values), length(t));
 
 % Loop through each rF value
-for i = 1:length(gammaF_values)
+for i = 1:length(rF_values)
     % Update the FSH_equation function with the new rF value
-    FSH_equation_new = @(t, FSH) FSH_equation_sensitivity(t, FSH, E2, Ih, gammaF_values(i));
+    FSH_equation_new = @(t, FSH) FSH_equation_sensitivity(t, FSH, E2, Ih, rF_values(i));
     
     % Run the simulation
     [t_temp, FSH_temp] = ode45(@(t, FSH) FSH_equation_new(t, FSH), [startTime, stopTime], initialFSH);
@@ -81,130 +72,159 @@ end
 
 % Plot the sensitivity analysis results
 figure;
-surf(t, gammaF_values, FSH_values);
+surf(t, rF_values, FSH_values);
 xlabel('Time (days)');
-ylabel('gammaF Parameter');
+ylabel('rF Parameter');
 zlabel('FSH Concentration');
-title('Sensitivity Analysis: FSH vs gammaF Parameter');
+title('Sensitivity Analysis: FSH vs rF Parameter');
 
-% Create a new figure
-figure;
+%% Sensitivity_dF
 
-% First subplot: Time vs FSH concentration
-subplot(2, 1, 1);
-for i = 1:length(gammaF_values)
-    plot(t, FSH_values(i, :), 'LineWidth', 2);
-    hold on;
-end
-
-xlabel('Time (days)');
-ylabel('FSH Concentration');
-title('Sensitivity Analysis: Time vs FSH Concentration');
-legend(arrayfun(@(x) sprintf('gammaF = %.2f', x), gammaF_values, 'UniformOutput', false), 'Location', 'bestoutside');
-
-% Second subplot: gammaF vs FSH concentration at specific time points
-subplot(2, 1, 2);
-specific_time_points = [0, 7, 14, 28]; % Set the desired time points
-num_time_points = length(specific_time_points);
-time_idx = zeros(1, num_time_points);
-
-% Find the indices corresponding to the specific time points
-for i = 1:num_time_points
-    [~, time_idx(i)] = min(abs(t - specific_time_points(i)));
-end
-
-% Plot each time point in the same subplot with a unique color and linestyle
-plot_styles = {'-', '-', '-', '-'};
-colors = {'b', 'r', 'g', 'k'};
-for i = 1:num_time_points
-    plot(gammaF_values, FSH_values(:, time_idx(i)), 'LineWidth', 2, ...
-        'Color', colors{i}, 'LineStyle', plot_styles{i});
-    hold on;
-end
-xlabel('gammaF Parameter');
-ylabel('FSH Concentration');
-
-% Create the legend with the time points
-legend_labels = cell(1, num_time_points);
-for i = 1:num_time_points
-    legend_labels{i} = sprintf('t = %.1f days', t(time_idx(i)));
-end
-legend(legend_labels, 'Location', 'best');
-
-% Set the title
-title('Sensitivity Analysis: gammaF vs FSH Concentration at Specific Time Points');
-
-%% Sensitivity with respect to FSH
-
-% Vary the FSH parameter
-FSH_values = linspace(0, 100, 10);  % Create a range of FSH values to test
+% Vary the dF parameter
+dF_values = linspace(0.2, 0.8, 5);  % Create a range of dF values to test
 
 % Initialize a matrix to store FSH concentrations
-FSH_sensitivity = zeros(length(FSH_values), length(t));
+FSH_values_dF = zeros(length(dF_values), length(t));
 
-% Loop through each FSH value
-for i = 1:length(FSH_values)
-    % Run the simulation with the new initial FSH value
-    [t_temp, FSH_temp] = ode45(@(t, FSH) FSH_equation(t, FSH, E2, Ih), [startTime, stopTime], FSH_values(i));
+% Loop through each dF value
+for i = 1:length(dF_values)
+    % Update the FSH_equation function with the new dF value
+    FSH_equation_new = @(t, FSH) FSH_equation_sensitivity_dF(t, FSH, E2, Ih, dF_values(i));
+    
+    % Run the simulation
+    [t_temp, FSH_temp] = ode45(@(t, FSH) FSH_equation_new(t, FSH), [startTime, stopTime], initialFSH);
     
     % Interpolate FSH_temp to match the size of t
     FSH_temp_interp = interp1(t_temp, FSH_temp, t);
     
-    % Store the FSH concentrations for the current FSH value
-    FSH_sensitivity(i, :) = FSH_temp_interp';
+    % Store the FSH concentrations for the current dF value
+    FSH_values_dF(i, :) = FSH_temp_interp';
 end
 
 % Plot the sensitivity analysis results
 figure;
-surf(t, FSH_values, FSH_sensitivity);
+surf(t, dF_values, FSH_values_dF);
 xlabel('Time (days)');
-ylabel('FSH Parameter');
+ylabel('dF Parameter');
 zlabel('FSH Concentration');
-title('Sensitivity Analysis: FSH vs FSH Parameter');
+title('Sensitivity Analysis: FSH vs dF Parameter');
 
-% Create a new figure
-figure;
+%% FSH Concentration vs dFSHdt
+% Vary the dF parameter
+dF_values = linspace(0.2, 0.8, 5);  % Create a range of dF values to test
 
-% First subplot: Time vs FSH concentration
-subplot(2, 1, 1);
-for i = 1:length(FSH_values)
-    plot(t, FSH_sensitivity(i, :), 'LineWidth', 2);
-    hold on;
+% Initialize a matrix to store FSH concentrations
+FSH_values = zeros(length(dF_values), length(t));
+
+% Loop through each dF value
+for i = 1:length(dF_values)
+    % Update the FSH_equation function with the new dF value
+    FSH_equation_new = @(t, FSH) FSH_equation_sensitivity_dF(t, FSH, E2, Ih, dF_values(i));
+    
+    % Run the simulation
+    [t_temp, FSH_temp] = ode45(@(t, FSH) FSH_equation_new(t, FSH), [startTime, stopTime], initialFSH);
+    
+    % Interpolate FSH_temp to match the size of t
+    FSH_temp_interp = interp1(t_temp, FSH_temp, t);
+    
+    % Store the FSH concentrations for the current dF value
+    FSH_values(i, :) = FSH_temp_interp';
 end
 
+% Create a new figure for Time vs FSH concentration
+figure;
+for i = 1:length(dF_values)
+    plot(t, FSH_values(i, :), 'LineWidth', 2);
+    hold on;
+end
 xlabel('Time (days)');
 ylabel('FSH Concentration');
 title('Sensitivity Analysis: Time vs FSH Concentration');
-legend(arrayfun(@(x) sprintf('FSH = %.2f', x), FSH_values, 'UniformOutput', false), 'Location', 'bestoutside');
+legend(arrayfun(@(x) sprintf('dF = %.2f', x), dF_values, 'UniformOutput', false), 'Location', 'bestoutside');
 
-% Second subplot: FSH vs FSH concentration at specific time points
-subplot(2, 1, 2);
-specific_time_points = [0, 7, 14, 28]; % Set the desired time points
-num_time_points = length(specific_time_points);
-time_idx = zeros(1, num_time_points);
+% Calculate dFSHdt values for each FSH value and dF value
+dFSHdt_values = zeros(size(FSH_values));
 
-% Find the indices corresponding to the specific time points
-for i = 1:num_time_points
-    [~, time_idx(i)] = min(abs(t - specific_time_points(i)));
+for i = 1:length(dF_values)
+    for j = 1:length(t)
+        dFSHdt_values(i, j) = FSH_equation_sensitivity_dF(t(j), FSH_values(i, j), E2, Ih, dF_values(i));
+    end
 end
 
-% Plot each time point in the same subplot with a unique color and linestyle
-plot_styles = {'-', '-', '-', '-'};
-colors = {'b', 'r', 'g', 'k'};
-for i = 1:num_time_points
-    plot(FSH_values, FSH_sensitivity(:, time_idx(i)), 'LineWidth', 2, ...
-        'Color', colors{i}, 'LineStyle', plot_styles{i});
-    hold on;
+% Plot the FSH values against the corresponding dFSHdt values for different dF values
+figure;
+hold on;
+for i = 1:length(dF_values)
+    plot(FSH_values(i, :), dFSHdt_values(i, :), 'LineWidth', 2);
 end
-xlabel('FSH Parameter');
+xlabel('FSH Concentration');
+ylabel('Change Rate of FSH Concentration');
+title('FSH Concentration vs Change Rate of FSH Concentration for Varying dF Values');
+legend(arrayfun(@(x) sprintf('dF = %.2f', x), dF_values, 'UniformOutput', false), 'Location', 'bestoutside');
+hold off;
+
+%% Phase Portrait
+FSH_range = linspace(-30,30, 150);
+
+dF_single = 1.5; % Set a single value for dF
+dFSHdt_grid = FSH_derivatives(FSH_range, t, E2, Ih, dF_single);
+[T_grid, FSH_grid] = meshgrid(t, FSH_range);
+U_grid = ones(size(T_grid));
+
+figure;
+hold on;
+% Plot the vector field
+for j = 1:length(t)
+    V_grid = dFSHdt_grid(:, j);
+    quiver(T_grid(:, j), FSH_grid(:, j), U_grid(:, j), V_grid, .75, 'k');
+end
+
+% Overlay the trajectories for different initial FSH concentrations
+initial_FSH_values = linspace(-20,30,5);
+rF_placeholder = 1.5;  % Please replace this with the correct value or variable
+for i = 1:length(initial_FSH_values)
+    [t1, FSH1] = ode45(@(t, FSH) FSH_steady_state(FSH, E2(t), Ih(t), rF_placeholder, dF_single), t, initial_FSH_values(i));
+    plot(t1, FSH1, 'linewidth', 1);
+end
+
+xlim([0, 20]); ylim([-1, 5]);
+xticks(0:2:20); yticks(-2:1:5);
+ 
+xlabel('Time (days)');
 ylabel('FSH Concentration');
+title('FSH Concentration vs Change Rate of FSH Concentration (Phase Portrait)');
+hold off;
 
-% Create the legend with the time points
-legend_labels = cell(1, num_time_points);
-for i = 1:num_time_points
-    legend_labels{i} = sprintf('t = %.1f days', t(time_idx(i)));
+%% Fixed Points
+fixed_points_dFSHdt = cell(length(dF_values), 1);
+rF=1.5;
+
+for i = 1:length(dF_values)
+    FSH_ss_new = @(FSH) FSH_steady_state(FSH, E2, Ih, rF, dF_values(i));
+    initial_FSH_guesses = linspace(0, 100, 5); % Adjust the range and the number of guesses as needed
+    fixed_points_temp = zeros(size(initial_FSH_guesses));
+    
+    for j = 1:length(initial_FSH_guesses)
+        fixed_point = fsolve(FSH_ss_new, initial_FSH_guesses(j));
+        fixed_points_temp(j) = fixed_point;
+    end
+    
+    fixed_points_temp = unique(fixed_points_temp, 'stable');
+    
+    % Filter out fixed points that are too close to each other
+    filtered_fixed_points = fixed_points_temp(1);
+    for k = 2:length(fixed_points_temp)
+        if abs(fixed_points_temp(k) - fixed_points_temp(k-1)) > 1e-2
+            filtered_fixed_points = [filtered_fixed_points; fixed_points_temp(k)];
+        end
+    end
+    
+    fixed_points_dFSHdt{i} = filtered_fixed_points;
 end
-legend(legend_labels, 'Location', 'best');
 
-% Set the title
-title('Sensitivity Analysis: FSH vs FSH Concentration at Specific Time Points');
+% Display the fixed points
+for i = 1:length(dF_values)
+    disp(['Fixed points for dF = ' num2str(dF_values(i)) ': ' num2str(fixed_points_dFSHdt{i}')]);
+end
+
+

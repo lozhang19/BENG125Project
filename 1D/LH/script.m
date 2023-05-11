@@ -1,6 +1,7 @@
+clear all; close all;
 % Simulation parameters
 startTime = 0;
-stopTime = 56;
+stopTime = 28;
 dt = 0.001;
 
 % Parameters for E2 and Ih functions
@@ -16,7 +17,7 @@ E2 = @(t) e0 + e1 * exp(-(t-14)^2/e2)+e1 * exp(-(t-45)^2/e2);
 % Parameters for E2 and Ih functions
 p0= 30;
 p1= 15;
-p2= 100;
+p2= 15;
 
 % P4 function
 P4 = @(t) p0+ p1 * exp(-(t-22)^2/p2)+p1 * exp(-(t-53)^2/p2);
@@ -44,74 +45,109 @@ xlabel('Time (days)');
 ylabel('P4 Concentration');
 title('1D Hormonal Regulation Model: P4');
 
-%% Fixed Points
-% Parameters
+%% Sensitivity for e1
+% E2 function
+E2_updated = @(t, e1) e0 + e1 * exp(-(t-14)^2/e2)+e1 * exp(-(t-45)^2/e2);
+
+% Vary the e1 parameter
+e1_values = linspace(50, 300, 5);  % Create a range of e1 values to test
+
+% Parameters for LH
 rL = 1.5;
-E2_value = E2(14);  
-P4_value = P4(14);  
+dL = 0.4;
 
-% Use fsolve to find the fixed point
-LH_fixed_point = fsolve(@(LH) LH_steady_state(LH, E2_value, P4_value, rL), initialLH);
+% Initialize a matrix to store LH concentrations
+LH_values_e1 = zeros(length(e1_values), length(t));
 
-disp(['LH fixed point: ', num2str(LH_fixed_point)]);
+% Loop through each e1 value
+for i = 1:length(e1_values)
+    % Update the E2 function with the new e1 value
+    E2_updated = @(t, e1) e0 + e1 * exp(-(t-14)^2/e2)+e1 * exp(-(t-45)^2/e2);
 
-%% Sensitivity
-
-% Vary the rL parameter
-rL_values = linspace(0.5, 3, 10);  % Create a range of rF values to test
-
-% Initialize a matrix to store FSH concentrations
-LH_values = zeros(length(rL_values), length(t));
-
-% Loop through each rF value
-for i = 1:length(rL_values)
-    % Update the FSH_equation function with the new rF value
-    LH_equation_new = @(t, LH) LH_equation_sensitivity(t, LH, E2, P4, rL_values(i));
+    % Update the LH_equation function with the new e1 value
+    LH_equation_new = @(t, LH) LH_equation_sensitivity_e1(t, LH, E2_updated, P4, rL, dL, e1_values(i));
     
     % Run the simulation
     [t_temp, LH_temp] = ode45(@(t, LH) LH_equation_new(t, LH), [startTime, stopTime], initialLH);
     
-    % Interpolate FSH_temp to match the size of t
+    % Interpolate LH_temp to match the size of t
     LH_temp_interp = interp1(t_temp, LH_temp, t);
     
-    % Store the FSH concentrations for the current rF value
-    LH_values(i, :) = LH_temp_interp';
+    % Store the LH concentrations for the current e1 value
+    LH_values_e1(i, :) = LH_temp_interp';
 end
+
 
 % Plot the sensitivity analysis results
 figure;
-surf(t, rL_values, LH_values);
+surf(t, e1_values, LH_values_e1);
 xlabel('Time (days)');
-ylabel('rL Parameter');
+ylabel('e1 Parameter');
 zlabel('LH Concentration');
-title('Sensitivity Analysis: LH vs rL Parameter');
-%% Sensitivity for alphaL
+title('Sensitivity Analysis: LH vs e1 Parameter');
 
-% Vary the rL parameter
-dL_values = linspace(-2, 2, 10);  % Create a range of rF values to test
+% Create a new figure for Time vs LH concentration
+figure;
+for i = 1:length(e1_values)
+    plot(t, LH_values_e1(i, :), 'LineWidth', 2);
+    hold on;
+end
+xlabel('Time (days)');
+ylabel('LH Concentration');
+title('Sensitivity Analysis: Time vs LH Concentration');
+legend(arrayfun(@(x) sprintf('e1 = %.2f', x), e1_values, 'UniformOutput', false), 'Location', 'bestoutside');
 
-% Initialize a matrix to store FSH concentrations
-LH_values = zeros(length(rL_values), length(t));
+% Calculate dLHdt values for each LH value and e1 value
+dLHdt_values_e1 = zeros(size(LH_values_e1));
 
-% Loop through each rF value
-for i = 1:length(rL_values)
-    % Update the FSH_equation function with the new rF value
-    LH_equation_new = @(t, LH) LH_equation_sensitivity(t, LH, E2, P4, dL_values(i));
-    
-    % Run the simulation
-    [t_temp, LH_temp] = ode45(@(t, LH) LH_equation_new(t, LH), [startTime, stopTime], initialLH);
-    
-    % Interpolate FSH_temp to match the size of t
-    LH_temp_interp = interp1(t_temp, LH_temp, t);
-    
-    % Store the FSH concentrations for the current rF value
-    LH_values(i, :) = LH_temp_interp';
+for i = 1:length(e1_values)
+    for j = 1:length(t)
+        dLHdt_values_e1(i, j) = LH_equation_sensitivity_e1(t(j), LH_values_e1(i, j), E2_updated, P4, rL, dL, e1_values(i));
+    end
 end
 
-% Plot the sensitivity analysis results
+% Plot the LH values against the corresponding dLHdt values for different e1 values
 figure;
-surf(t, dL_values, LH_values);
+hold on;
+for i = 1:length(e1_values)
+    plot(LH_values_e1(i, :), dLHdt_values_e1(i, :), 'LineWidth', 2);
+end
+xlabel('LH Concentration');
+ylabel('Change Rate of LH Concentration');
+title('LH Concentration vs Change Rate of LH Concentration for Varying e1 Values');
+legend(arrayfun(@(x) sprintf('e1 = %.2f', x), e1_values, 'UniformOutput', false), 'Location', 'bestoutside');
+hold off
+
+%% Phase Portrait
+LH_range = linspace(-10,100, 80);
+
+dL_single = 0.4; % Set a single value for dL
+dLHdt_grid = LH_derivatives(LH_range, t, E2, P4);
+[T_grid, LH_grid] = meshgrid(t, LH_range);
+U_grid = ones(size(T_grid));
+
+figure;
+hold on;
+% Plot the vector field
+for j = 1:length(t)
+    V_grid = dLHdt_grid(:, j);
+    quiver(T_grid(:, j), LH_grid(:, j), U_grid(:, j), V_grid, 0.4, 'k');
+end
+
+% Overlay the trajectories for different initial LH concentrations
+initial_LH_values = linspace(-20,30,5);
+rL_placeholder = 1.5;  % Please replace this with the correct value or variable
+for i = 1:length(initial_LH_values)
+    [t1, LH1] = ode45(@(t, LH) LH_steady_state(LH, E2(t), P4(t), rL_placeholder, dL_single), t, initial_LH_values(i));
+    plot(t1, LH1, 'linewidth', 1);
+end
+
+xlim([0, 12]); ylim([16, 60]);
+xticks(0:2:16); yticks(-10:4:60);
+
 xlabel('Time (days)');
-ylabel('alphaL Parameter');
-zlabel('LH Concentration');
-title('Sensitivity Analysis: LH vs dL Parameter');
+ylabel('LH Concentration');
+title('LH Concentration vs Change Rate of LH Concentration (Phase Portrait)');
+hold off;
+
+

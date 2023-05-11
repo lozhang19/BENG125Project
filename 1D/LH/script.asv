@@ -1,0 +1,244 @@
+clear all; close all;
+% Simulation parameters
+startTime = 0;
+stopTime = 28;
+dt = 0.001;
+
+% Parameters for E2 and Ih functions
+e0 = 62.48;
+e1 = 230;
+e2 = 5;
+e3 = 115;
+e4 = 20;
+
+% E2 function
+E2 = @(t) e0 + e1 * exp(-(t-14)^2/e2)+e1 * exp(-(t-45)^2/e2);
+
+% Parameters for E2 and Ih functions
+p0= 30;
+p1= 15;
+p2= 15;
+
+% P4 function
+P4 = @(t) p0+ p1 * exp(-(t-22)^2/p2)+p1 * exp(-(t-53)^2/p2);
+
+% Initial condition for FSH
+initialLH = 20;
+
+% Run the simulation
+[t, LH] = ode45(@(t, LH) LH_equation(t, LH, E2, P4), [startTime, stopTime], initialLH);
+
+% Plot results
+figure;
+plot(t, LH, 'LineWidth', 2);
+xlabel('Time (days)');
+ylabel('LH Concentration');
+title('1D Hormonal Regulation Model: LH');
+
+% Calculate P4 for each time point
+P4_values = arrayfun(P4, t);
+
+% Plot E2
+figure;
+plot(t, P4_values, 'LineWidth', 2);
+xlabel('Time (days)');
+ylabel('P4 Concentration');
+title('1D Hormonal Regulation Model: P4');
+
+%% Sensitivity for e1
+% E2 function
+E2_updated = @(t, e1) e0 + e1 * exp(-(t-14)^2/e2)+e1 * exp(-(t-45)^2/e2);
+
+% Vary the e1 parameter
+e1_values = linspace(50, 300, 5);  % Create a range of e1 values to test
+
+% Parameters for LH
+rL = 1.5;
+dL = 0.4;
+
+% Initialize a matrix to store LH concentrations
+LH_values_e1 = zeros(length(e1_values), length(t));
+
+% Loop through each e1 value
+for i = 1:length(e1_values)
+    % Update the E2 function with the new e1 value
+    E2_updated = @(t, e1) e0 + e1 * exp(-(t-14)^2/e2)+e1 * exp(-(t-45)^2/e2);
+
+    % Update the LH_equation function with the new e1 value
+    LH_equation_new = @(t, LH) LH_equation_sensitivity_e1(t, LH, E2_updated, P4, rL, dL, e1_values(i));
+    
+    % Run the simulation
+    [t_temp, LH_temp] = ode45(@(t, LH) LH_equation_new(t, LH), [startTime, stopTime], initialLH);
+    
+    % Interpolate LH_temp to match the size of t
+    LH_temp_interp = interp1(t_temp, LH_temp, t);
+    
+    % Store the LH concentrations for the current e1 value
+    LH_values_e1(i, :) = LH_temp_interp';
+end
+
+
+% Plot the sensitivity analysis results
+figure;
+surf(t, e1_values, LH_values_e1);
+xlabel('Time (days)');
+ylabel('e1 Parameter');
+zlabel('LH Concentration');
+title('Sensitivity Analysis: LH vs e1 Parameter');
+
+% Create a new figure for Time vs LH concentration
+figure;
+for i = 1:length(e1_values)
+    plot(t, LH_values_e1(i, :), 'LineWidth', 2);
+    hold on;
+end
+xlabel('Time (days)');
+ylabel('LH Concentration');
+title('Sensitivity Analysis: Time vs LH Concentration');
+legend(arrayfun(@(x) sprintf('e1 = %.2f', x), e1_values, 'UniformOutput', false), 'Location', 'bestoutside');
+
+% Calculate dLHdt values for each LH value and e1 value
+dLHdt_values_e1 = zeros(size(LH_values_e1));
+
+for i = 1:length(e1_values)
+    for j = 1:length(t)
+        dLHdt_values_e1(i, j) = LH_equation_sensitivity_e1(t(j), LH_values_e1(i, j), E2_updated, P4, rL, dL, e1_values(i));
+    end
+end
+
+% Plot the LH values against the corresponding dLHdt values for different e1 values
+figure;
+hold on;
+for i = 1:length(e1_values)
+    plot(LH_values_e1(i, :), dLHdt_values_e1(i, :), 'LineWidth', 2);
+end
+xlabel('LH Concentration');
+ylabel('Change Rate of LH Concentration');
+title('LH Concentration vs Change Rate of LH Concentration for Varying e1 Values');
+legend(arrayfun(@(x) sprintf('e1 = %.2f', x), e1_values, 'UniformOutput', false), 'Location', 'bestoutside');
+hold off
+
+%% Phase Portrait
+LH_range = linspace(-10,100, 80);
+
+dL_single = 0.4; % Set a single value for dL
+dLHdt_grid = LH_derivatives(LH_range, t, E2, P4);
+[T_grid, LH_grid] = meshgrid(t, LH_range);
+U_grid = ones(size(T_grid));
+
+figure;
+hold on;
+% Plot the vector field
+for j = 1:length(t)
+    V_grid = dLHdt_grid(:, j);
+    quiver(T_grid(:, j), LH_grid(:, j), U_grid(:, j), V_grid, 0.4, 'k');
+end
+
+% Overlay the trajectories for different initial LH concentrations
+initial_LH_values = linspace(-20,30,5);
+rL_placeholder = 1.5;  % Please replace this with the correct value or variable
+for i = 1:length(initial_LH_values)
+    [t1, LH1] = ode45(@(t, LH) LH_steady_state(LH, E2(t), P4(t), rL_placeholder, dL_single), t, initial_LH_values(i));
+    plot(t1, LH1, 'linewidth', 1);
+end
+
+xlim([0, 12]); ylim([16, 60]);
+xticks(0:2:16); yticks(-10:4:60);
+
+xlabel('Time (days)');
+ylabel('LH Concentration');
+title('LH Concentration vs Change Rate of LH Concentration (Phase Portrait)');
+hold off;
+%% Prepare for bifurcation analysis
+clear all; close all;
+
+% Add MatCont path
+addpath('path/to/matcont'); % Replace with the path to your MatCont folder
+
+% Define the FSH system function
+function dFSHdt = fsh_system(t, FSH, p)
+    % t: time
+    % FSH: state variable (FSH concentration)
+    % p: parameter values
+
+    % Unpack the parameters
+    dF = p(1);
+    % ... (add other parameters as needed)
+
+    % Define the system equation
+    FSH_equation = ... % Replace with your FSH equation
+
+    % Return the time derivative
+    dFSHdt = FSH_equation;
+end
+
+% Initial condition
+initial_FSH = ...; % Set your initial FSH value
+
+% Parameter values
+dF = ...; % Set your dF parameter value
+% ... (add other parameters as needed)
+p = [dF]; % Collect all parameter values in a vector
+
+% Active parameter index for continuation
+ap = 1;
+
+% Set up the MatCont options
+opt = contset();
+opt.MaxNumPoints = 100;
+opt.Singularities = 1;
+
+% Perform the bifurcation analysis
+[branch1, s1] = SetupStst(@fsh_system, initial_FSH, p, ap, opt);
+
+%% Prepare for bifurcation analysis
+
+% Add MatCont path
+addpath('path/to/matcont'); % Replace with the path to your MatCont folder
+
+% Define the FSH system function
+function dFSHdt = fsh_system(t, FSH, p)
+    % t: time
+    % FSH: state variable (FSH concentration)
+    % p: parameter values
+
+    % Unpack the parameters
+    dF = p(1);
+    % ... (add other parameters as needed)
+
+    % Define the system equation
+    FSH_equation = ... % Replace with your FSH equation
+
+    % Return the time derivative
+    dFSHdt = FSH_equation;
+end
+
+% Initial condition
+initial_FSH = ...; % Set your initial FSH value
+
+% Parameter values
+dF = ...; % Set your dF parameter value
+% ... (add other parameters as needed)
+p = [dF]; % Collect all parameter values in a vector
+
+% Active parameter index for continuation
+ap = 1;
+
+% Set up the MatCont options
+opt = contset();
+opt.MaxNumPoints = 100;
+opt.Singularities = 1;
+
+% Perform the bifurcation analysis
+[branch1, s1] = SetupStst(@fsh_system, initial_FSH, p, ap, opt);
+
+% Plot the bifurcation diagram
+figure;
+x_vals = arrayfun(@(x) x.parameter(ap), branch1.point);
+y_vals = arrayfun(@(x) x.x, branch1.point);
+
+plot(x_vals, y_vals, 'LineWidth', 2);
+xlabel('dF');
+ylabel('FSH Concentration');
+title('Bifurcation Diagram: FSH vs dF');
+
